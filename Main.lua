@@ -9,7 +9,7 @@ local LocalPlayer = Players.LocalPlayer
 
 -- Ganti URL di bawah dengan raw URL RideAPetGUI.lua kamu sendiri
 -- (mis. raw.githubusercontent.com/USERNAME/REPO/main/RideAPetGUI.lua)
-local GUI_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/RideAPetGUI.lua"
+local GUI_URL = "https://raw.githubusercontent.com/ZhangCy27/Ride-A-Pet/refs/heads/main/GUI/RideAPetGUI.lua"
 local UIModule = loadstring(game:HttpGet(GUI_URL))()
 local Hub = UIModule.CreateWindow('Ride A <font color="rgb(65,135,255)">Pet</font>', "MAIN UTILITIES")
 
