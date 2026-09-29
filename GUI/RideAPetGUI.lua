@@ -377,7 +377,140 @@ function UIModule.CreateWindow(title, subtitle)
 		return card
 	end
 
-	------------------------------------------------------------------
+	-- Kartu khusus "Select Egg Luck": tombol cepat (All/High) + slider skala-log 5..50T.
+	-- presets = { {label="All", value=0}, {label="High", value=1e9}, ... }
+	-- callback(value:number) dipanggil setiap kali nilai berubah (lewat preset atau geser).
+	local function CreateLuckPicker(titleText, presets, min, max, default, callback, formatter)
+		local card = New("Frame", { Size = UDim2.new(1, -6, 0, 100), BackgroundColor3 = Theme.Card }, Scroll)
+		Round(card, 12)
+		Stroke(card, Theme.Border, 1, 0.5)
+
+		local sdot = New("Frame", {
+			Size = UDim2.fromOffset(6, 6), Position = UDim2.fromOffset(16, 15), BackgroundColor3 = Theme.Accent,
+		}, card)
+		Round(sdot, 99)
+		New("TextLabel", {
+			Size = UDim2.new(1, -110, 0, 20), Position = UDim2.fromOffset(30, 8),
+			BackgroundTransparency = 1, Text = titleText, TextColor3 = Theme.Text,
+			Font = Enum.Font.GothamBold, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+		}, card)
+
+		local valueLabel = New("TextLabel", {
+			Size = UDim2.fromOffset(70, 20), Position = UDim2.new(1, -80, 0, 8),
+			BackgroundTransparency = 1, Text = formatter and formatter(default) or tostring(default), TextColor3 = Theme.AccentLight,
+			Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right,
+		}, card)
+
+		-- Baris tombol preset (All / High / dst)
+		local presetButtons = {}
+		local n = #presets
+		local gap = 6
+		local btnW = (1 / n)
+		for i, p in ipairs(presets) do
+			local btn = New("TextButton", {
+				Size = UDim2.new(btnW, (i == 1 and -14 or -8) - (i == n and 0 or 0), 0, 24),
+				Position = UDim2.new(btnW * (i - 1), 7, 0, 30),
+				BackgroundColor3 = Theme.Off, Text = p.label, TextColor3 = Theme.TextSecondary,
+				Font = Enum.Font.GothamBold, TextSize = 10,
+			}, card)
+			Round(btn, 8)
+			local st = Stroke(btn, Theme.OffStroke, 1, 0.2)
+			presetButtons[i] = { btn = btn, stroke = st, value = p.value, label = p.label }
+		end
+
+		local bar = New("Frame", {
+			Size = UDim2.new(1, -28, 0, 6), Position = UDim2.fromOffset(14, 74), BackgroundColor3 = Theme.Off,
+		}, card)
+		Round(bar, 99)
+
+		-- Skala logaritmik: alpha 0..1 <-> nilai min..max (perkalian, bukan penjumlahan)
+		local logMin, logMax = math.log(min), math.log(max)
+		local function valueToAlpha(v)
+			v = math.clamp(v, min, max)
+			return (math.log(v) - logMin) / (logMax - logMin)
+		end
+		local function alphaToValue(a)
+			a = math.clamp(a, 0, 1)
+			return math.floor(math.exp(logMin + a * (logMax - logMin)) + 0.5)
+		end
+
+		local a0 = valueToAlpha(math.max(default, min))
+		local fill = New("Frame", { Size = UDim2.new(a0, 0, 1, 0), BackgroundColor3 = Theme.Accent }, bar)
+		Round(fill, 99)
+		local knob = New("Frame", {
+			Size = UDim2.fromOffset(12, 12), Position = UDim2.new(a0, -6, 0.5, -6), BackgroundColor3 = Theme.Text,
+		}, bar)
+		Round(knob, 99)
+
+		local lastV = default
+
+		local function SetActivePreset(activeIdx)
+			for i, p in ipairs(presetButtons) do
+				local active = (i == activeIdx)
+				Tween(p.btn, 0.15, { BackgroundColor3 = active and Theme.On or Theme.Off })
+				Tween(p.stroke, 0.15, { Color = active and Theme.OnStroke or Theme.OffStroke })
+				p.btn.TextColor3 = active and Theme.OnAccent or Theme.TextSecondary
+			end
+		end
+
+		local function ApplyValue(v, fromPresetIdx)
+			v = math.floor(v)
+			lastV = v
+			valueLabel.Text = formatter and formatter(v) or tostring(v)
+			local a = valueToAlpha(math.max(v, min))
+			fill.Size = UDim2.fromScale(a, 1)
+			knob.Position = UDim2.new(a, -6, 0.5, -6)
+			SetActivePreset(fromPresetIdx)
+		end
+
+		for i, p in ipairs(presetButtons) do
+			p.btn.MouseButton1Click:Connect(function()
+				if p.value ~= lastV then
+					lastV = p.value
+					callback(p.value)
+				end
+				ApplyValue(p.value, i)
+			end)
+		end
+
+		local dragging = false
+		local function update(input)
+			local raw = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+			local v = alphaToValue(raw)
+			if v ~= lastV then
+				lastV = v
+				callback(v)
+			end
+			valueLabel.Text = formatter and formatter(v) or tostring(v)
+			fill.Size = UDim2.fromScale(raw, 1)
+			knob.Position = UDim2.new(raw, -6, 0.5, -6)
+			SetActivePreset(nil) -- geser manual = lepas dari preset
+		end
+
+		bar.InputBegan:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				update(i)
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(i)
+			if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+				update(i)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end)
+
+		-- Tandai preset aktif di awal (kalau default cocok salah satu preset)
+		for i, p in ipairs(presetButtons) do
+			if p.value == default then SetActivePreset(i) break end
+		end
+
+		return card
+	end
 	-- Buka/tutup + drag
 	------------------------------------------------------------------
 
@@ -460,6 +593,10 @@ function UIModule.CreateWindow(title, subtitle)
 
 	function Hub:CreateSlider(titleText, min, max, default, callback, formatter)
 		return CreateSlider(titleText, min, max, default, callback, formatter)
+	end
+
+	function Hub:CreateLuckPicker(titleText, presets, min, max, default, callback, formatter)
+		return CreateLuckPicker(titleText, presets, min, max, default, callback, formatter)
 	end
 
 	return Hub
