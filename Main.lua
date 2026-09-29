@@ -1,4 +1,4 @@
--- Ride A Pet | Main (logika) - GUI terpisah di RideAPetGUI.lua
+-- Ride A Pet | Main (logic) - GUI separated into RideAPetGUI.lua
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -7,9 +7,9 @@ local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Ganti URL di bawah dengan raw URL RideAPetGUI.lua kamu sendiri
--- (mis. raw.githubusercontent.com/USERNAME/REPO/main/RideAPetGUI.lua)
-local GUI_URL = "https://raw.githubusercontent.com/ZhangCy27/Ride-A-Pet/refs/heads/main/GUI/RideAPetGUI.lua"
+-- Replace the URL below with your own RideAPetGUI.lua raw URL
+-- (e.g. raw.githubusercontent.com/USERNAME/REPO/main/RideAPetGUI.lua)
+local GUI_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/RideAPetGUI.lua"
 local UIModule = loadstring(game:HttpGet(GUI_URL))()
 local Hub = UIModule.CreateWindow('Ride A <font color="rgb(65,135,255)">Pet</font>', "MAIN UTILITIES")
 
@@ -19,40 +19,22 @@ local Hub = UIModule.CreateWindow('Ride A <font color="rgb(65,135,255)">Pet</fon
 local autoEggEnabled = false
 local autoPlaceEnabled = false
 local autoRebirthEnabled = false
-local selectedLuckThreshold = 0 -- 0 = All, geser slider = minimum luck yang diterima
+local selectedLuckThreshold = 0 -- 0 = All, slider value = minimum luck accepted
 local tweenSpeed = 500 -- studs/s
 local autoHatchEnabled = false
-local autoHatchLuckEnabled = false
-local luckMode = "+1 per Tick"
 
 local MIN_SPEED, MAX_SPEED = 50, 750
 local MIN_LUCK, MAX_LUCK = 5, 5e13 -- 5 .. 50T
 
--- Konfigurasi Auto Open Egg (sesuaikan bila nama di game berbeda)
+-- Auto Open Egg configuration (adjust if the in-game names differ)
 local OPEN_REMOTE_NAMES = { "OpenEgg", "HatchEgg", "EggOpen", "EggHatch", "Hatch" }
 local OPEN_KEYWORDS = { "open", "hatch", "buka", "tetas" }
-local OPEN_INTERVAL = 1 -- detik
+local OPEN_INTERVAL = 1 -- seconds
 
 local GameRemotes = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Game")
 local EggPlacedRemote = GameRemotes and GameRemotes:FindFirstChild("EggPlaced")
 local RebirthRemote = GameRemotes and GameRemotes:FindFirstChild("Rebirth")
 local RequestPlotEggsRemote = GameRemotes and GameRemotes:FindFirstChild("RequestPlotEggs")
-
--- Konfigurasi fitur baru.
--- Nama remote di bawah adalah TEBAKAN - cek nama & argumen aslinya di game
--- (mis. pakai remote spy), lalu sesuaikan di sini. Pencarian tidak peka huruf besar/kecil
--- dan mencari di seluruh ReplicatedStorage.
-local REMOTE_NAMES = {
-	HatchLuck    = { "HatchLuck", "BuyHatchLuck", "UpgradeHatchLuck", "PurchaseHatchLuck" },
-}
-local LUCK_MODES = { "+1 per Tick", "Buy Max" }
-local LUCK_ARGS = { -- argumen yang dikirim ke remote sesuai mode purchase
-	["+1 per Tick"] = { 1 },
-	["Buy Max"] = { "Max" },
-}
-local INTERVALS = { -- detik per tick
-	HatchLuck = 0.5,
-}
 
 ------------------------------------------------------------------
 -- Luck helpers
@@ -85,7 +67,7 @@ local function MatchesLuck(luckText)
 end
 
 ------------------------------------------------------------------
--- Daftar egg sesuai filter luck
+-- List of eggs matching the luck filter
 ------------------------------------------------------------------
 local function GetMatchingEggs()
 	local folder = Workspace:FindFirstChild("RenderedEggs")
@@ -109,10 +91,10 @@ local function GetChar()
 	return character, humanoid, root
 end
 
--- True kalau Auto Egg sedang jalan mengambil egg / kembali ke plot
+-- True while Auto Egg is running (grabbing an egg / returning to plot)
 local eggBusy = false
 
--- Tracking egg BARU. Egg yang sudah ada di backpack diabaikan.
+-- Tracks NEW eggs only. Eggs already in the backpack are ignored.
 local placeQueue = {}
 local knownTools = setmetatable({}, { __mode = "k" })
 local hookedContainers = setmetatable({}, { __mode = "k" })
@@ -136,9 +118,9 @@ end
 
 local function OnToolAdded(t)
 	if not t:IsA("Tool") then return end
-	if knownTools[t] then return end -- sudah pernah dilihat (mis. pindah backpack <-> tangan)
+	if knownTools[t] then return end -- already seen before (e.g. moved backpack <-> hand)
 	knownTools[t] = true
-	if os.clock() < spawnGraceUntil then return end -- tool bawaan setelah respawn
+	if os.clock() < spawnGraceUntil then return end -- starter tool right after respawn
 	if autoPlaceEnabled and IsEggTool(t) then
 		table.insert(placeQueue, t)
 	end
@@ -172,12 +154,12 @@ end)
 
 local function ResetPlaceTracking()
 	table.clear(placeQueue)
-	MarkExistingTools() -- egg yang sudah ada saat toggle ON tidak akan dipasang
+	MarkExistingTools() -- eggs already present when the toggle turns ON won't be placed
 end
 
--- Pasang SATU egg baru dari antrian (bukan egg lama di backpack)
+-- Place ONE new egg from the queue (not an old egg already in the backpack)
 local function PlaceNewEgg()
-	if eggBusy then return end -- tunggu Auto Egg sampai di plot
+	if eggBusy then return end -- wait until Auto Egg reaches the plot
 	while placeQueue[1] and not placeQueue[1].Parent do table.remove(placeQueue, 1) end
 	local tool = placeQueue[1]
 	if not tool or not EggPlacedRemote then return end
@@ -199,7 +181,7 @@ local function PlaceNewEgg()
 	if not tool.Parent then
 		table.remove(placeQueue, 1)
 	else
-		-- egg masih ada (stack / gagal): coba maksimal 3 kali
+		-- egg is still there (stacked / failed): retry up to 3 times
 		tool:SetAttribute("_placeTry", (tool:GetAttribute("_placeTry") or 0) + 1)
 		if tool:GetAttribute("_placeTry") >= 3 then table.remove(placeQueue, 1) end
 	end
@@ -243,7 +225,7 @@ local function CancelMovement()
 	end
 end
 
--- alive: fungsi yang return false saat fitur dimatikan -> tween langsung dibatalkan
+-- alive: function that returns false once the feature is turned off -> tween is cancelled immediately
 local function TweenToCFrame(targetCFrame, alive)
 	local _, _, root = GetChar()
 	if not root then return false end
@@ -300,7 +282,7 @@ local function ForceTriggerPrompts(model, alive)
 end
 
 ------------------------------------------------------------------
--- Auto Hatch Egg (buka telur yang sudah dipasang)
+-- Auto Hatch Egg (open eggs that are already placed)
 ------------------------------------------------------------------
 local function GetMyPlot()
 	local plotsFolder = Workspace:FindFirstChild("Plots")
@@ -337,7 +319,7 @@ end
 local function OpenPlacedEggs()
 	local opened = 0
 
-	-- 1) Prompt buka/tetas milik plot sendiri
+	-- 1) Open/hatch prompts on the player's own plot
 	local plot = GetMyPlot()
 	if plot then
 		for _, d in ipairs(plot:GetDescendants()) do
@@ -360,7 +342,7 @@ local function OpenPlacedEggs()
 		end
 	end
 
-	-- 2) Remote buka telur (jika ada)
+	-- 2) Egg-opening remote (if any)
 	if GameRemotes then
 		for _, name in ipairs(OPEN_REMOTE_NAMES) do
 			if not autoHatchEnabled then return opened end
@@ -375,217 +357,7 @@ local function OpenPlacedEggs()
 end
 
 ------------------------------------------------------------------
--- Helper remote (fitur index / hatch luck)
-------------------------------------------------------------------
-local RemoteCache, RemoteLastTry, RemoteWarned = {}, {}, {}
-
-local function FindRemoteByNames(names)
-	local wanted = {}
-	for _, n in ipairs(names) do wanted[string.lower(n)] = true end
-	for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
-		if (d:IsA("RemoteEvent") or d:IsA("RemoteFunction")) and wanted[string.lower(d.Name)] then
-			return d
-		end
-	end
-	return nil
-end
-
-local function GetRemote(key)
-	local r = RemoteCache[key]
-	if r and r.Parent then return r end
-	if os.clock() - (RemoteLastTry[key] or -10) < 5 then return nil end -- jangan scan tiap tick
-	RemoteLastTry[key] = os.clock()
-	r = FindRemoteByNames(REMOTE_NAMES[key])
-	RemoteCache[key] = r
-	if not r and not RemoteWarned[key] then
-		RemoteWarned[key] = true
-		warn("[Ride A Pet] Remote '" .. key .. "' tidak ditemukan. Sesuaikan REMOTE_NAMES." .. key)
-	end
-	return r
-end
-
-local function FireFeature(key, ...)
-	local r = GetRemote(key)
-	if not r then return false end
-	if r:IsA("RemoteEvent") then
-		r:FireServer(...)
-	else
-		r:InvokeServer(...)
-	end
-	return true
-end
-
-------------------------------------------------------------------
--- Hatch Luck (klik tombol UI: +1 / MAX)
-------------------------------------------------------------------
-
-local hatchLuckCache = nil
-local hatchLuckLastScan = -10
-local hatchLuckLogged = false
-
-local function IsCostText(t)
-	return tostring(t):match("^%s*%$") ~= nil
-end
-
-local function ButtonForLabel(label, root)
-	local n = label
-	while n and n ~= root.Parent do
-		if n:IsA("GuiButton") then return n end
-		n = n.Parent
-	end
-	-- tombol transparan yang menimpa label
-	local c = label.AbsolutePosition + label.AbsoluteSize / 2
-	local best, bestArea
-	for _, b in ipairs(root:GetDescendants()) do
-		if b:IsA("GuiButton") and b.Visible then
-			local p, s = b.AbsolutePosition, b.AbsoluteSize
-			if c.X >= p.X and c.X <= p.X + s.X and c.Y >= p.Y and c.Y <= p.Y + s.Y then
-				local area = s.X * s.Y
-				if not bestArea or area < bestArea then best, bestArea = b, area end
-			end
-		end
-	end
-	return best
-end
-
-local function CostLabelsIn(root)
-	local labels = {}
-	for _, x in ipairs(root:GetDescendants()) do
-		if (x:IsA("TextLabel") or x:IsA("TextButton")) and IsCostText(x.Text) then
-			table.insert(labels, x)
-		end
-	end
-	return labels
-end
-
-local function ScanHatchLuck()
-	local bases = { LocalPlayer:FindFirstChild("PlayerGui"), Workspace }
-	for _, base in ipairs(bases) do
-		if base then
-			for _, d in ipairs(base:GetDescendants()) do
-				if d:IsA("TextLabel") and d.Text == "Hatch Luck" and not d:IsDescendantOf(Hub.ScreenGui) then
-					-- naik sampai ketemu container yang punya >= 2 tombol harga
-					local node = d.Parent
-					while node and node ~= base do
-						local labels = CostLabelsIn(node)
-						if #labels >= 2 then
-							local entries, seen = {}, {}
-							for _, l in ipairs(labels) do
-								local btn = ButtonForLabel(l, node)
-								if btn and not seen[btn] then
-									seen[btn] = true
-									table.insert(entries, { btn = btn, cost = ParseLuck(l.Text) or 0, text = l.Text })
-								end
-							end
-							if #entries >= 2 then
-								local maxLabel
-								for _, x in ipairs(node:GetDescendants()) do
-									if x:IsA("TextLabel") and string.upper((x.Text:gsub("%s+", ""))) == "MAX" then
-										maxLabel = x
-										break
-									end
-								end
-								local plus, max
-								if maxLabel then
-									local mc = maxLabel.AbsolutePosition + maxLabel.AbsoluteSize / 2
-									local bestDist
-									for _, e in ipairs(entries) do
-										local c = e.btn.AbsolutePosition + e.btn.AbsoluteSize / 2
-										local dist = (c - mc).Magnitude
-										if not bestDist or dist < bestDist then bestDist, max = dist, e end
-									end
-									for _, e in ipairs(entries) do
-										if e ~= max and (not plus or e.cost < plus.cost) then plus = e end
-									end
-								else
-									table.sort(entries, function(x, y) return x.cost < y.cost end)
-									plus, max = entries[1], entries[#entries]
-								end
-								if plus and max then return { plus = plus, max = max } end
-							end
-						end
-						node = node.Parent
-					end
-				end
-			end
-		end
-	end
-	return nil
-end
-
-local function GetHatchLuckButtons()
-	local c = hatchLuckCache
-	if c and c.plus.btn.Parent and c.max.btn.Parent then return c end
-	if os.clock() - hatchLuckLastScan < 3 then return nil end -- jangan scan tiap tick
-	hatchLuckLastScan = os.clock()
-	hatchLuckCache = ScanHatchLuck()
-	if hatchLuckCache and not hatchLuckLogged then
-		hatchLuckLogged = true
-		print("[Hatch Luck] +1 = " .. hatchLuckCache.plus.text .. " | MAX = " .. hatchLuckCache.max.text)
-	end
-	return hatchLuckCache
-end
-
-local function ClickButton(btn)
-	local fired = false
-	if type(firesignal) == "function" then
-		pcall(function() firesignal(btn.MouseButton1Click); fired = true end)
-		pcall(function() firesignal(btn.Activated); fired = true end)
-	elseif type(getconnections) == "function" then
-		for _, ev in ipairs({ btn.MouseButton1Click, btn.Activated }) do
-			pcall(function()
-				for _, conn in ipairs(getconnections(ev)) do conn:Fire(); fired = true end
-			end)
-		end
-	end
-	return fired
-end
-
--- Argumen RequestPlotEggs per mode. BELUM DIPASTIKAN arahnya - kalau setelah
--- dicoba di game ternyata kebalik (+1 malah Buy Max atau sebaliknya), tukar
--- saja nilai true/false di bawah ini.
-local HATCH_LUCK_REQUEST_ARGS = {
-	["+1 per Tick"] = false,
-	["Buy Max"] = true,
-}
-
-local hatchLuckMethodLogged = {}
-local function LogHatchLuckMethod(method)
-	if hatchLuckMethodLogged[method] then return end
-	hatchLuckMethodLogged[method] = true
-	print("[Hatch Luck] Berhasil pakai metode: " .. method)
-end
-
-local function BuyHatchLuck()
-	-- 1) Cara lama: klik tombol UI asli (+1 / MAX)
-	local b = GetHatchLuckButtons()
-	if b then
-		local entry = (luckMode == "Buy Max") and b.max or b.plus
-		if ClickButton(entry.btn) then
-			LogHatchLuckMethod("tombol UI")
-			return
-		end
-	end
-
-	-- 2) RequestPlotEggs dengan argumen boolean sesuai mode
-	if RequestPlotEggsRemote then
-		local ok = pcall(function()
-			RequestPlotEggsRemote:FireServer(HATCH_LUCK_REQUEST_ARGS[luckMode])
-		end)
-		if ok then
-			LogHatchLuckMethod("RequestPlotEggs(" .. tostring(HATCH_LUCK_REQUEST_ARGS[luckMode]) .. ")")
-			return
-		end
-	end
-
-	-- 3) Fallback lama: cari remote bernama HatchLuck/BuyHatchLuck/dst
-	if FireFeature("HatchLuck", table.unpack(LUCK_ARGS[luckMode] or { 1 })) then
-		LogHatchLuckMethod("remote HatchLuck (fallback)")
-	end
-end
-
-------------------------------------------------------------------
--- MENU (UI -> logika)
+-- MENU (UI -> logic)
 ------------------------------------------------------------------
 
 local function FormatLuckNumber(v)
@@ -613,33 +385,25 @@ Hub:CreateLuckPicker(
 	FormatLuckNumber
 )
 
-Hub:CreateToggle("AUTO EGG", "Ambil telur sesuai filter luck", function(v)
+Hub:CreateToggle("AUTO EGG", "Collect eggs matching the luck filter", function(v)
 	autoEggEnabled = v
-	if not v then CancelMovement() end -- berhenti di tempat, langsung
+	if not v then CancelMovement() end -- stop in place immediately
 end)
 
-Hub:CreateToggle("AUTO PLACE EGG", "Pasang egg yang baru didapat (bukan isi backpack)", function(v)
+Hub:CreateToggle("AUTO PLACE EGG", "Place newly obtained eggs (not backpack contents)", function(v)
 	autoPlaceEnabled = v
 	ResetPlaceTracking()
 end)
 
-Hub:CreateToggle("AUTO HATCH EGG", "Buka / tetas telur yang sudah dipasang", function(v)
+Hub:CreateToggle("AUTO HATCH EGG", "Open / hatch eggs that are already placed", function(v)
 	autoHatchEnabled = v
 end)
 
-Hub:CreateToggle("AUTO REBIRTH", "Rebirth otomatis (cooldown 5 detik)", function(v)
+Hub:CreateToggle("AUTO REBIRTH", "Automatic rebirth (5 second cooldown)", function(v)
 	autoRebirthEnabled = v
 end)
 
-Hub:CreateToggle("AUTO HATCH LUCK", "Beli Hatch Luck: +1 per tick / Buy Max", function(v)
-	autoHatchLuckEnabled = v
-end)
-
-Hub:CreateDropdown("PURCHASE MODE", LUCK_MODES, luckMode, function(opt)
-	luckMode = opt
-end)
-
-Hub:CreateSlider("KECEPATAN TWEEN", MIN_SPEED, MAX_SPEED, tweenSpeed, function(v)
+Hub:CreateSlider("TWEEN SPEED", MIN_SPEED, MAX_SPEED, tweenSpeed, function(v)
 	tweenSpeed = v
 end)
 
@@ -647,7 +411,7 @@ end)
 -- Loops
 ------------------------------------------------------------------
 
--- Tick loop: cek flag tiap 0.05 detik, jadi berhenti langsung saat dimatikan
+-- Tick loop: checks the flag every 0.05s, so it stops immediately when turned off
 local function StartLoop(interval, isEnabled, fn)
 	task.spawn(function()
 		local last = 0
@@ -670,26 +434,23 @@ StartLoop(5, function() return autoRebirthEnabled and RebirthRemote ~= nil end, 
 	RebirthRemote:FireServer()
 end)
 
--- Minta server refresh/render egg di plot (dipakai Auto Egg & Auto Place)
+-- Ask the server to refresh/render the plot's eggs (used by Auto Egg & Auto Place)
 StartLoop(2, function() return (autoEggEnabled or autoPlaceEnabled) and RequestPlotEggsRemote ~= nil end, function()
 	RequestPlotEggsRemote:FireServer(false)
 end)
 
--- Auto Place Egg (hanya egg baru)
+-- Auto Place Egg (new eggs only)
 StartLoop(0.3, function() return autoPlaceEnabled end, PlaceNewEgg)
 
 -- Auto Hatch Egg
 StartLoop(OPEN_INTERVAL, function() return autoHatchEnabled end, OpenPlacedEggs)
-
--- Auto Hatch Luck (+1 per tick / buy max)
-StartLoop(INTERVALS.HatchLuck, function() return autoHatchLuckEnabled end, BuyHatchLuck)
 
 -- Auto Egg
 local function AliveEgg() return autoEggEnabled end
 
 local function RunEggCycle()
 	if not Workspace:FindFirstChild("RenderedEggs") then
-		warn("[Auto Egg] workspace.RenderedEggs tidak ditemukan!")
+		warn("[Auto Egg] workspace.RenderedEggs not found!")
 		WaitAlive(1, AliveEgg)
 		return
 	end
@@ -719,7 +480,7 @@ local function RunEggCycle()
 	if myPlotCF then
 		if not TweenToCFrame(myPlotCF + Vector3.new(0, 3, 0), AliveEgg) then return end
 	else
-		warn("[Auto Egg] Plot pemain tidak ditemukan!")
+		warn("[Auto Egg] Player plot not found!")
 	end
 	WaitAlive(0.3, AliveEgg)
 end
