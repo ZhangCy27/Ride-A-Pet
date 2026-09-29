@@ -9,7 +9,7 @@ local LocalPlayer = Players.LocalPlayer
 
 -- Ganti URL di bawah dengan raw URL RideAPetGUI.lua kamu sendiri
 -- (mis. raw.githubusercontent.com/USERNAME/REPO/main/RideAPetGUI.lua)
-local GUI_URL = "https://raw.githubusercontent.com/ZhangCy27/Ride-A-Pet/refs/heads/main/GUI/RideAPetGUI.lua"
+local GUI_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/RideAPetGUI.lua"
 local UIModule = loadstring(game:HttpGet(GUI_URL))()
 local Hub = UIModule.CreateWindow('Ride A <font color="rgb(65,135,255)">Pet</font>', "MAIN UTILITIES")
 
@@ -19,17 +19,14 @@ local Hub = UIModule.CreateWindow('Ride A <font color="rgb(65,135,255)">Pet</fon
 local autoEggEnabled = false
 local autoPlaceEnabled = false
 local autoRebirthEnabled = false
-local selectedLuck = "All"
+local selectedLuckThreshold = 0 -- 0 = All, geser slider = minimum luck yang diterima
 local tweenSpeed = 500 -- studs/s
 local autoHatchEnabled = false
 local autoHatchLuckEnabled = false
 local luckMode = "+1 per Tick"
 
 local MIN_SPEED, MAX_SPEED = 50, 750
-
-local luckOptions = {
-	"All", "High"
-}
+local MIN_LUCK, MAX_LUCK = 5, 5e13 -- 5 .. 50T
 
 -- Konfigurasi Auto Open Egg (sesuaikan bila nama di game berbeda)
 local OPEN_REMOTE_NAMES = { "OpenEgg", "HatchEgg", "EggOpen", "EggHatch", "Hatch" }
@@ -81,16 +78,10 @@ local function ParseLuck(text)
 	return number
 end
 
-local function IsHighLuck(text) -- High = 1B - 50T
-	local v = ParseLuck(text)
-	return v ~= nil and v >= 1e9 and v <= 5e13
-end
-
 local function MatchesLuck(luckText)
-	if selectedLuck == "All" then return true end
-	if selectedLuck == "High" then return IsHighLuck(luckText) end
-	local a, b = ParseLuck(luckText), ParseLuck(selectedLuck)
-	return a ~= nil and b ~= nil and a == b
+	local v = ParseLuck(luckText)
+	if not v then return false end
+	return v >= selectedLuckThreshold
 end
 
 ------------------------------------------------------------------
@@ -597,11 +588,30 @@ end
 -- MENU (UI -> logika)
 ------------------------------------------------------------------
 
-Hub:CreateSlider("SELECT EGG LUCK", 1, #luckOptions, 1, function(i)
-	selectedLuck = luckOptions[i]
-end, function(i)
-	return luckOptions[i]
-end)
+local function FormatLuckNumber(v)
+	v = math.floor(v + 0.5)
+	if v <= 0 then return "All" end
+	local suffixes = { { 1e12, "T" }, { 1e9, "B" }, { 1e6, "M" }, { 1e3, "K" } }
+	for _, s in ipairs(suffixes) do
+		if v >= s[1] then
+			local num = v / s[1]
+			local text = (num >= 100 and string.format("%.0f", num))
+				or (num >= 10 and string.format("%.1f", num))
+				or string.format("%.2f", num)
+			text = text:gsub("%.?0+$", "")
+			return text .. s[2]
+		end
+	end
+	return tostring(v)
+end
+
+Hub:CreateLuckPicker(
+	"SELECT EGG LUCK",
+	{ { label = "All", value = 0 }, { label = "High", value = 1e9 } },
+	MIN_LUCK, MAX_LUCK, 0,
+	function(v) selectedLuckThreshold = v end,
+	FormatLuckNumber
+)
 
 Hub:CreateToggle("AUTO EGG", "Ambil telur sesuai filter luck", function(v)
 	autoEggEnabled = v
