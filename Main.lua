@@ -21,15 +21,9 @@ local autoPlaceEnabled = false
 local autoRebirthEnabled = false
 local selectedLuckThreshold = 0 -- 0 = All, slider value = minimum luck accepted
 local tweenSpeed = 500 -- studs/s
-local autoHatchEnabled = false
 
 local MIN_SPEED, MAX_SPEED = 50, 750
 local MIN_LUCK, MAX_LUCK = 5, 5e13 -- 5 .. 50T
-
--- Auto Open Egg configuration (adjust if the in-game names differ)
-local OPEN_REMOTE_NAMES = { "OpenEgg", "HatchEgg", "EggOpen", "EggHatch", "Hatch" }
-local OPEN_KEYWORDS = { "open", "hatch", "buka", "tetas" }
-local OPEN_INTERVAL = 1 -- seconds
 
 local GameRemotes = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Game")
 local EggPlacedRemote = GameRemotes and GameRemotes:FindFirstChild("EggPlaced")
@@ -282,81 +276,6 @@ local function ForceTriggerPrompts(model, alive)
 end
 
 ------------------------------------------------------------------
--- Auto Hatch Egg (open eggs that are already placed)
-------------------------------------------------------------------
-local function GetMyPlot()
-	local plotsFolder = Workspace:FindFirstChild("Plots")
-	if not plotsFolder then return nil end
-	for _, plot in ipairs(plotsFolder:GetChildren()) do
-		local dataFolder = plot:FindFirstChild("Data")
-		local ownerVal = dataFolder and dataFolder:FindFirstChild("Owner")
-		if ownerVal then
-			local ownerName = ""
-			if ownerVal:IsA("StringValue") then
-				ownerName = ownerVal.Value
-			elseif ownerVal:IsA("ObjectValue") and ownerVal.Value then
-				ownerName = ownerVal.Value.Name
-			end
-			if ownerName == LocalPlayer.Name or ownerName == LocalPlayer.DisplayName then
-				return plot
-			end
-		end
-	end
-	return nil
-end
-
-local function PromptLooksLikeOpen(prompt)
-	local text = string.lower(
-		tostring(prompt.ActionText) .. " " .. tostring(prompt.ObjectText) .. " " ..
-		prompt.Name .. " " .. (prompt.Parent and prompt.Parent.Name or "")
-	)
-	for _, kw in ipairs(OPEN_KEYWORDS) do
-		if string.find(text, kw, 1, true) then return true end
-	end
-	return false
-end
-
-local function OpenPlacedEggs()
-	local opened = 0
-
-	-- 1) Open/hatch prompts on the player's own plot
-	local plot = GetMyPlot()
-	if plot then
-		for _, d in ipairs(plot:GetDescendants()) do
-			if not autoHatchEnabled then return opened end
-			if d:IsA("ProximityPrompt") and d.Enabled and PromptLooksLikeOpen(d) then
-				pcall(function()
-					d.HoldDuration = 0
-					d.RequiresLineOfSight = false
-					d.MaxActivationDistance = 1e4
-					if type(fireproximityprompt) == "function" then
-						fireproximityprompt(d)
-					else
-						d:InputHoldBegin()
-						task.wait(0.05)
-						d:InputHoldEnd()
-					end
-					opened = opened + 1
-				end)
-			end
-		end
-	end
-
-	-- 2) Egg-opening remote (if any)
-	if GameRemotes then
-		for _, name in ipairs(OPEN_REMOTE_NAMES) do
-			if not autoHatchEnabled then return opened end
-			local r = GameRemotes:FindFirstChild(name)
-			if r and r:IsA("RemoteEvent") then
-				pcall(function() r:FireServer() end)
-			end
-		end
-	end
-
-	return opened
-end
-
-------------------------------------------------------------------
 -- MENU (UI -> logic)
 ------------------------------------------------------------------
 
@@ -393,10 +312,6 @@ end)
 Hub:CreateToggle("AUTO PLACE EGG", "Place newly obtained eggs (not backpack contents)", function(v)
 	autoPlaceEnabled = v
 	ResetPlaceTracking()
-end)
-
-Hub:CreateToggle("AUTO HATCH EGG", "Open / hatch eggs that are already placed", function(v)
-	autoHatchEnabled = v
 end)
 
 Hub:CreateToggle("AUTO REBIRTH", "Automatic rebirth (5 second cooldown)", function(v)
@@ -441,9 +356,6 @@ end)
 
 -- Auto Place Egg (new eggs only)
 StartLoop(0.3, function() return autoPlaceEnabled end, PlaceNewEgg)
-
--- Auto Hatch Egg
-StartLoop(OPEN_INTERVAL, function() return autoHatchEnabled end, OpenPlacedEggs)
 
 -- Auto Egg
 local function AliveEgg() return autoEggEnabled end
