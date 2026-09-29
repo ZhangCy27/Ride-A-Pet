@@ -1,12 +1,12 @@
 -- RideAPetGUI.lua
--- Modul UI (pill + window) untuk Ride A Pet Hub.
--- Pakai dari script lain seperti ini:
+-- UI module (pill + window) for the Ride A Pet Hub.
+-- Use it from another script like this:
 --
---   local UIModule = loadstring(game:HttpGet("RAW_URL_KAMU_DISINI"))()
+--   local UIModule = loadstring(game:HttpGet("YOUR_RAW_URL_HERE"))()
 --   local Hub = UIModule.CreateWindow("Ride A Pet", "MAIN UTILITIES")
---   Hub:CreateToggle("AUTO EGG", "Ambil telur", function(v) ... end)
+--   Hub:CreateToggle("AUTO EGG", "Collect eggs", function(v) ... end)
 --   Hub:CreateDropdown("SELECT AREA", {"All","Forest"}, "All", function(opt) ... end)
---   Hub:CreateSlider("KECEPATAN", 50, 750, 500, function(v) ... end)
+--   Hub:CreateSlider("SPEED", 50, 750, 500, function(v) ... end)
 
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -69,7 +69,7 @@ function UIModule.CreateWindow(title, subtitle)
 		if o then o:Destroy() end
 	end)
 
-	-- Theme & helpers UI
+	-- Theme & UI helpers
 	------------------------------------------------------------------
 	local Theme = {
 		Background = Color3.fromRGB(0, 0, 0),
@@ -121,7 +121,7 @@ function UIModule.CreateWindow(title, subtitle)
 		ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	end
 
-	-- Logo "F" (dipakai di pill & header)
+	-- "F" logo (used in the pill & header)
 	local function CreateLogo(parent)
 		local logo = New("Frame", {
 			Size = UDim2.fromOffset(36, 36), Position = UDim2.fromOffset(12, 9),
@@ -151,7 +151,7 @@ function UIModule.CreateWindow(title, subtitle)
 		}, parent)
 	end
 
-	-- Pill (kondisi minimize) - bisa digeser, tap untuk membuka
+	-- Pill (minimized state) - draggable, tap to open
 	local Pill = New("Frame", {
 		Name = "Pill", Size = PILL_SIZE, Position = UDim2.new(0.5, 0, 0, 60),
 		AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Theme.Background,
@@ -162,7 +162,7 @@ function UIModule.CreateWindow(title, subtitle)
 	CreateLogo(Pill)
 	CreateTitleBlock(Pill)
 
-	-- Window utama
+	-- Main window
 	local MainFrame = New("Frame", {
 		Name = "MainFrame", Size = FULL_SIZE, Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Theme.Background,
@@ -171,7 +171,7 @@ function UIModule.CreateWindow(title, subtitle)
 	Round(MainFrame, 20)
 	Stroke(MainFrame, Theme.Border, 1.5, 0.05)
 
-	-- garis biru kecil di atas window
+	-- small blue bar on top of the window
 	local TopBar = New("Frame", {
 		Size = UDim2.fromOffset(74, 3), Position = UDim2.new(0.5, -37, 0, 0),
 		BackgroundColor3 = Theme.Accent, BorderSizePixel = 0,
@@ -207,7 +207,7 @@ function UIModule.CreateWindow(title, subtitle)
 	}, Scroll)
 
 	------------------------------------------------------------------
-	-- Komponen
+	-- Components
 	------------------------------------------------------------------
 	local function CreateToggle(titleText, subText, callback)
 		local btn = New("TextButton", { Size = UDim2.new(1, -6, 0, 52), BackgroundColor3 = Theme.Off, Text = "" }, Scroll)
@@ -251,7 +251,7 @@ function UIModule.CreateWindow(title, subtitle)
 		return btn
 	end
 
-	-- Dropdown yang membuka daftar (lebih praktis untuk banyak opsi)
+	-- Dropdown that opens a list (more practical for many options)
 	local function CreateDropdown(titleText, options, default, callback)
 		local COLLAPSED = 48
 		local LIST_H = math.min(#options * 30, 150)
@@ -347,7 +347,7 @@ function UIModule.CreateWindow(title, subtitle)
 		local lastV = default
 		local function update(input)
 			local raw = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-			local v = math.floor(min + raw * (max - min) + 0.5) -- snap ke nilai bulat terdekat
+			local v = math.floor(min + raw * (max - min) + 0.5) -- snap to the nearest whole value
 			local a = (max > min) and (v - min) / (max - min) or 0
 			valueLabel.Text = formatter and formatter(v) or tostring(v)
 			fill.Size = UDim2.fromScale(a, 1)
@@ -377,9 +377,9 @@ function UIModule.CreateWindow(title, subtitle)
 		return card
 	end
 
-	-- Kartu khusus "Select Egg Luck": tombol cepat (All/High) + slider skala-log 5..50T.
+	-- Special "Select Egg Luck" card: quick preset buttons (All/High) + log-scale slider 5..50T.
 	-- presets = { {label="All", value=0}, {label="High", value=1e9}, ... }
-	-- callback(value:number) dipanggil setiap kali nilai berubah (lewat preset atau geser).
+	-- callback(value:number) fires whenever the value changes (via preset or drag).
 	local function CreateLuckPicker(titleText, presets, min, max, default, callback, formatter)
 		local card = New("Frame", { Size = UDim2.new(1, -6, 0, 100), BackgroundColor3 = Theme.Card }, Scroll)
 		Round(card, 12)
@@ -401,7 +401,7 @@ function UIModule.CreateWindow(title, subtitle)
 			Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right,
 		}, card)
 
-		-- Baris tombol preset (All / High / dst)
+		-- Preset button row (All / High / etc.)
 		local presetButtons = {}
 		local n = #presets
 		local gap = 6
@@ -423,7 +423,7 @@ function UIModule.CreateWindow(title, subtitle)
 		}, card)
 		Round(bar, 99)
 
-		-- Skala logaritmik: alpha 0..1 <-> nilai min..max (perkalian, bukan penjumlahan)
+		-- Logarithmic scale: alpha 0..1 <-> value min..max (multiplicative, not additive)
 		local logMin, logMax = math.log(min), math.log(max)
 		local function valueToAlpha(v)
 			v = math.clamp(v, min, max)
@@ -484,7 +484,7 @@ function UIModule.CreateWindow(title, subtitle)
 			valueLabel.Text = formatter and formatter(v) or tostring(v)
 			fill.Size = UDim2.fromScale(raw, 1)
 			knob.Position = UDim2.new(raw, -6, 0.5, -6)
-			SetActivePreset(nil) -- geser manual = lepas dari preset
+			SetActivePreset(nil) -- manual drag = detach from preset
 		end
 
 		bar.InputBegan:Connect(function(i)
@@ -504,14 +504,14 @@ function UIModule.CreateWindow(title, subtitle)
 			end
 		end)
 
-		-- Tandai preset aktif di awal (kalau default cocok salah satu preset)
+		-- Mark the active preset at start (if default matches one of the presets)
 		for i, p in ipairs(presetButtons) do
 			if p.value == default then SetActivePreset(i) break end
 		end
 
 		return card
 	end
-	-- Buka/tutup + drag
+	-- Open/close + drag
 	------------------------------------------------------------------
 
 	local windowPos = UDim2.fromScale(0.5, 0.5)
