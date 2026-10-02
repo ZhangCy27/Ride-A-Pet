@@ -130,7 +130,7 @@ function UIModule.CreateWindow(title, subtitle)
 		Round(logo, 10)
 		Stroke(logo, Theme.Accent, 1.5, 0)
 		New("TextLabel", {
-			Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "F",
+			Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "ZQZ",
 			TextColor3 = Theme.Accent, Font = Enum.Font.GothamBlack, TextSize = 22,
 		}, logo)
 		return logo
@@ -377,11 +377,12 @@ function UIModule.CreateWindow(title, subtitle)
 		return card
 	end
 
-	-- Special "Select Egg Luck" card: quick preset buttons (All/High) + log-scale slider 5..50T.
+	-- Special "Select Egg Luck" card: preset buttons only (All / High), no slider.
 	-- presets = { {label="All", value=0}, {label="High", value=1e9}, ... }
-	-- callback(value:number) fires whenever the value changes (via preset or drag).
+	-- callback(value:number) fires whenever a preset is chosen.
+	-- min / max are kept in the signature for compatibility but are no longer used.
 	local function CreateLuckPicker(titleText, presets, min, max, default, callback, formatter)
-		local card = New("Frame", { Size = UDim2.new(1, -6, 0, 100), BackgroundColor3 = Theme.Card }, Scroll)
+		local card = New("Frame", { Size = UDim2.new(1, -6, 0, 70), BackgroundColor3 = Theme.Card }, Scroll)
 		Round(card, 12)
 		Stroke(card, Theme.Border, 1, 0.5)
 
@@ -404,43 +405,18 @@ function UIModule.CreateWindow(title, subtitle)
 		-- Preset button row (All / High / etc.)
 		local presetButtons = {}
 		local n = #presets
-		local gap = 6
 		local btnW = (1 / n)
 		for i, p in ipairs(presets) do
 			local btn = New("TextButton", {
-				Size = UDim2.new(btnW, (i == 1 and -14 or -8) - (i == n and 0 or 0), 0, 24),
-				Position = UDim2.new(btnW * (i - 1), 7, 0, 30),
+				Size = UDim2.new(btnW, (i == 1 and -14 or -8), 0, 26),
+				Position = UDim2.new(btnW * (i - 1), 7, 0, 34),
 				BackgroundColor3 = Theme.Off, Text = p.label, TextColor3 = Theme.TextSecondary,
-				Font = Enum.Font.GothamBold, TextSize = 10,
+				Font = Enum.Font.GothamBold, TextSize = 11,
 			}, card)
 			Round(btn, 8)
 			local st = Stroke(btn, Theme.OffStroke, 1, 0.2)
 			presetButtons[i] = { btn = btn, stroke = st, value = p.value, label = p.label }
 		end
-
-		local bar = New("Frame", {
-			Size = UDim2.new(1, -28, 0, 6), Position = UDim2.fromOffset(14, 74), BackgroundColor3 = Theme.Off,
-		}, card)
-		Round(bar, 99)
-
-		-- Logarithmic scale: alpha 0..1 <-> value min..max (multiplicative, not additive)
-		local logMin, logMax = math.log(min), math.log(max)
-		local function valueToAlpha(v)
-			v = math.clamp(v, min, max)
-			return (math.log(v) - logMin) / (logMax - logMin)
-		end
-		local function alphaToValue(a)
-			a = math.clamp(a, 0, 1)
-			return math.floor(math.exp(logMin + a * (logMax - logMin)) + 0.5)
-		end
-
-		local a0 = valueToAlpha(math.max(default, min))
-		local fill = New("Frame", { Size = UDim2.new(a0, 0, 1, 0), BackgroundColor3 = Theme.Accent }, bar)
-		Round(fill, 99)
-		local knob = New("Frame", {
-			Size = UDim2.fromOffset(12, 12), Position = UDim2.new(a0, -6, 0.5, -6), BackgroundColor3 = Theme.Text,
-		}, bar)
-		Round(knob, 99)
 
 		local lastV = default
 
@@ -453,58 +429,18 @@ function UIModule.CreateWindow(title, subtitle)
 			end
 		end
 
-		local function ApplyValue(v, fromPresetIdx)
-			v = math.floor(v)
-			lastV = v
-			valueLabel.Text = formatter and formatter(v) or tostring(v)
-			local a = valueToAlpha(math.max(v, min))
-			fill.Size = UDim2.fromScale(a, 1)
-			knob.Position = UDim2.new(a, -6, 0.5, -6)
-			SetActivePreset(fromPresetIdx)
-		end
-
 		for i, p in ipairs(presetButtons) do
 			p.btn.MouseButton1Click:Connect(function()
 				if p.value ~= lastV then
 					lastV = p.value
 					callback(p.value)
 				end
-				ApplyValue(p.value, i)
+				valueLabel.Text = formatter and formatter(p.value) or tostring(p.value)
+				SetActivePreset(i)
 			end)
 		end
 
-		local dragging = false
-		local function update(input)
-			local raw = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-			local v = alphaToValue(raw)
-			if v ~= lastV then
-				lastV = v
-				callback(v)
-			end
-			valueLabel.Text = formatter and formatter(v) or tostring(v)
-			fill.Size = UDim2.fromScale(raw, 1)
-			knob.Position = UDim2.new(raw, -6, 0.5, -6)
-			SetActivePreset(nil) -- manual drag = detach from preset
-		end
-
-		bar.InputBegan:Connect(function(i)
-			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-				dragging = true
-				update(i)
-			end
-		end)
-		UserInputService.InputChanged:Connect(function(i)
-			if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-				update(i)
-			end
-		end)
-		UserInputService.InputEnded:Connect(function(i)
-			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-				dragging = false
-			end
-		end)
-
-		-- Mark the active preset at start (if default matches one of the presets)
+		-- Mark the active preset at start
 		for i, p in ipairs(presetButtons) do
 			if p.value == default then SetActivePreset(i) break end
 		end
